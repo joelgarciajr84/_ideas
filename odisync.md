@@ -1,117 +1,158 @@
-Épico: Comparação e envio de diffs entre arquivos JSON de buckets S3
-🧪 História 1: Como engenheiro de dados, quero um Glue Job que compare arquivos JSON de dois buckets (ontem e hoje), para identificar e salvar as diferenças entre eles.
-Critérios de Aceitação:
+ História 1: Comparação de arquivos JSON entre dias consecutivos usando AWS Glue
+Narrativa / Visão do usuário
+Como engenheiro de dados, quero um Glue Job que compare arquivos JSON dos dias atual e anterior em dois buckets, para identificar diferenças e salvá-las em um bucket específico de "diffs".
 
-O Glue Job deve ler arquivos JSON dos buckets bucket_ontem/ e bucket_hoje/ (parametrizáveis).
+DOR
+Buckets de entrada e saída definidos.
 
-A comparação deve ocorrer por chave única presente nos arquivos.
+Glue habilitado na conta.
 
-As diferenças devem ser salvas como arquivos JSON no bucket bucket_diffs/YYYY-MM-DD/.
+Estrutura dos arquivos JSON acordada.
 
-O job deve rodar de forma parametrizada com a data do dia atual (ex: via trigger, step function, etc).
+Descrição
+Um job do AWS Glue será executado diariamente, lendo arquivos JSON de dois buckets (dia atual e dia anterior), comparando seus conteúdos e salvando as diferenças encontradas em um terceiro bucket, o bucket_diffs.
 
-Tarefas Técnicas:
+Premissas de desenvolvimento
+Os arquivos possuem uma chave única que permite a comparação.
 
- Criar script PySpark para comparar os dados.
+A estrutura dos arquivos permanece consistente.
 
- Criar Glue Job com IAM Role apropriada.
+A data do processamento será passada como parâmetro (ex: "hoje").
 
- Configurar trigger/evento para execução diária (pode ser por agendamento ou manual).
+Informações técnicas
+Linguagem: PySpark no Glue.
 
-📤 História 2: Como engenheiro de plataforma, quero que cada novo arquivo salvo no bucket de diffs envie uma mensagem a uma fila SQS, para processamentos posteriores.
-Critérios de Aceitação:
+Buckets:
 
-Cada novo arquivo no bucket_diffs/YYYY-MM-DD/ deve gerar uma mensagem na fila SQS.
+bucket_ontem/ano/mes/dia/
 
-A mensagem deve conter no mínimo o path do arquivo salvo e a data.
+bucket_hoje/ano/mes/dia/
 
-O bucket de diffs deve ter notificação configurada para a fila SQS.
+bucket_diffs/ano/mes/dia/
 
-A fila deve ser criada com políticas apropriadas de acesso.
+Output: arquivos JSON com diferenças.
 
-Tarefas Técnicas:
+IAM Role do Glue com permissões de leitura e escrita nos 3 buckets.
 
- Criar bucket de diffs com configuração de evento S3 → SQS.
+Passo a passo
+Criar buckets S3 (ontem, hoje, diffs).
 
- Criar fila SQS com permissões adequadas.
+Criar IAM Role com permissões nos buckets.
 
- Configurar notificação de evento no bucket.
+Desenvolver script PySpark de comparação.
 
-⏰ História 3: Como engenheiro de dados, quero um ECS Task agendado diariamente às 2h que leia os arquivos de diffs do dia atual e envie os eventos para um tópico Kafka.
-Critérios de Aceitação:
+Criar Glue Job com parâmetros de data.
 
-ECS Task deve ser agendada via EventBridge para execução diária às 2h da manhã.
+Criar trigger diária via Glue ou EventBridge.
 
-O container deve ler os arquivos do path bucket_diffs/YYYY-MM-DD/.
+Critério de aceite (DOD)
+Glue Job criado e visível no console.
 
-Cada arquivo deve ser lido e seu conteúdo publicado em um tópico Kafka.
+Arquivos de diffs gerados corretamente.
 
-O tópico Kafka e credenciais de acesso devem ser configuráveis.
+Job executa com parâmetros de data e salva saída no bucket correto.
 
-Tarefas Técnicas:
+Permissões validadas com sucesso.
 
- Criar imagem Docker que lê do S3 e envia para Kafka.
+🔹 História 2: Disparo de eventos SQS a partir de arquivos de diff salvos no S3
+Narrativa / Visão do usuário
+Como engenheiro de plataforma, quero que cada novo arquivo de diffs salvo no bucket envie uma mensagem a uma fila SQS, para que outras aplicações possam reagir a essas mudanças.
 
- Criar cluster ECS (ou usar existente).
+DOR
+Bucket de diffs já criado.
 
- Criar ECS Task Definition e EventBridge Rule.
+Permissões de eventos S3 para SQS disponíveis.
 
- Garantir que o task tenha acesso ao S3 e Kafka.
+Descrição
+A cada novo arquivo JSON salvo no bucket de diffs, uma mensagem é enviada automaticamente para uma fila SQS com metadados básicos (nome do arquivo, data, etc).
 
+Premissas de desenvolvimento
+Os eventos serão apenas de "PUT".
 
+A fila será do tipo standard.
 
+Mensagens terão formato simples e padronizado.
 
- infra
+Informações técnicas
+Fila SQS: diffs-events-queue
 
+Bucket: bucket_diffs
 
- Infraestrutura Glue + Buckets
- Criar dois buckets S3: bucket_hoje e bucket_ontem (parametrizáveis).
+Notificação: evento PUT → envia mensagem com caminho do arquivo.
 
- Criar bucket bucket_diffs para armazenar os diffs diários.
+IAM policy para permitir s3:PutObject → sqs:SendMessage.
 
- Criar Glue Job:
+Passo a passo
+Criar fila SQS com policy de acesso S3.
 
- Criar IAM Role para o Glue Job com permissões nos três buckets.
+Adicionar notificação no bucket_diffs.
 
- Criar script inicial (mesmo que placeholder) e apontar no Glue Job.
+Validar envio automático ao subir arquivos de teste.
 
- (Opcional) Criar trigger diária no Glue (ou Step Function) para rodar o job com a data do dia.
+Critério de aceite (DOD)
+Arquivos novos no bucket geram mensagens na fila.
 
-📩 Infraestrutura S3 + SQS
- Criar fila SQS diffs-events-queue.
+Mensagens seguem padrão { path: "...", date: "..." }.
 
- Criar política de acesso S3 → SQS (bucket pode publicar na fila).
+Fila visível e monitorável no console AWS.
 
- Configurar notificação no bucket_diffs para que eventos PUT de arquivos disparem mensagens para a fila SQS.
+IAM policies auditadas e seguras.
 
-🐳 Infraestrutura ECS + EventBridge
- Criar cluster ECS (ou referenciar um existente).
+🔹 História 3: ECS Task que consome fila SQS e envia eventos para Kafka
+Narrativa / Visão do usuário
+Como engenheiro de dados, quero um ECS agendado que consome eventos da fila SQS de diffs e envie os dados para um tópico Kafka, para alimentar fluxos downstream.
 
- Criar Task Definition com:
+DOR
+Fila SQS configurada.
 
-Imagem Docker (pode ser uma imagem dummy até o app estar pronto).
+Kafka acessível (público ou via VPC).
 
-IAM Role para acesso ao S3 e ao Kafka.
+Definição do payload Kafka.
 
- Criar EventBridge Rule para agendamento diário às 2h da manhã.
+Descrição
+Uma task do ECS será executada diariamente (ou sob demanda) para ler mensagens da fila SQS, processar os arquivos referenciados no S3, extrair dados e publicar em um tópico Kafka.
 
- Criar log group (CloudWatch) para os logs da task.
+Premissas de desenvolvimento
+Cada mensagem na fila contém o caminho de um arquivo válido no bucket de diffs.
 
-🔐 IAM e Segurança
- IAM Role para Glue Job (acesso a S3).
+O ECS possui permissão para acessar o S3 e Kafka.
 
- IAM Role para ECS Task (acesso a S3 e Kafka endpoint/secret).
+O formato da mensagem Kafka já é conhecido.
 
- Policies necessárias para o S3 publicar na SQS.
+Informações técnicas
+Serviço: ECS Fargate com task agendada via EventBridge.
 
- Variáveis sensíveis como secrets para Kafka (usando Secrets Manager ou variável de ambiente segura).
+Docker container custom com código Python (ou outro) para:
 
-📦 (Opcional) Observabilidade & Alertas
- Habilitar logging nos buckets S3.
+Ler mensagens da fila SQS.
 
- CloudWatch Logs para Glue e ECS.
+Baixar e processar os arquivos no S3.
 
- (Opcional) Alarme de falha na execução do ECS Task (ex: erro > 0).
+Enviar o conteúdo para o tópico Kafka.
 
+Kafka configurável por variáveis de ambiente ou Secrets Manager.
 
+Logs via CloudWatch.
+
+Passo a passo
+Criar container com app consumidor da SQS e publisher Kafka.
+
+Criar IAM Role com acesso a S3, SQS, Kafka.
+
+Criar cluster ECS e task definition.
+
+Criar agendamento diário às 2h via EventBridge.
+
+Configurar CloudWatch Logs para monitoramento.
+
+Critério de aceite (DOD)
+Task ECS executa com sucesso e sem erros.
+
+Mensagens da fila SQS são processadas e arquivos baixados.
+
+Eventos são publicados no tópico Kafka com sucesso.
+
+Logs visíveis no CloudWatch.
+
+Task pode ser monitorada e reagendada facilmente.
 
