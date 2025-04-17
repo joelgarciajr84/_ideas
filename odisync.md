@@ -58,3 +58,60 @@ Tarefas Técnicas:
 
  Garantir que o task tenha acesso ao S3 e Kafka.
 
+
+
+
+ infra
+
+
+ Infraestrutura Glue + Buckets
+ Criar dois buckets S3: bucket_hoje e bucket_ontem (parametrizáveis).
+
+ Criar bucket bucket_diffs para armazenar os diffs diários.
+
+ Criar Glue Job:
+
+ Criar IAM Role para o Glue Job com permissões nos três buckets.
+
+ Criar script inicial (mesmo que placeholder) e apontar no Glue Job.
+
+ (Opcional) Criar trigger diária no Glue (ou Step Function) para rodar o job com a data do dia.
+
+📩 Infraestrutura S3 + SQS
+ Criar fila SQS diffs-events-queue.
+
+ Criar política de acesso S3 → SQS (bucket pode publicar na fila).
+
+ Configurar notificação no bucket_diffs para que eventos PUT de arquivos disparem mensagens para a fila SQS.
+
+🐳 Infraestrutura ECS + EventBridge
+ Criar cluster ECS (ou referenciar um existente).
+
+ Criar Task Definition com:
+
+Imagem Docker (pode ser uma imagem dummy até o app estar pronto).
+
+IAM Role para acesso ao S3 e ao Kafka.
+
+ Criar EventBridge Rule para agendamento diário às 2h da manhã.
+
+ Criar log group (CloudWatch) para os logs da task.
+
+🔐 IAM e Segurança
+ IAM Role para Glue Job (acesso a S3).
+
+ IAM Role para ECS Task (acesso a S3 e Kafka endpoint/secret).
+
+ Policies necessárias para o S3 publicar na SQS.
+
+ Variáveis sensíveis como secrets para Kafka (usando Secrets Manager ou variável de ambiente segura).
+
+📦 (Opcional) Observabilidade & Alertas
+ Habilitar logging nos buckets S3.
+
+ CloudWatch Logs para Glue e ECS.
+
+ (Opcional) Alarme de falha na execução do ECS Task (ex: erro > 0).
+
+
+
